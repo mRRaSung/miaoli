@@ -1,0 +1,816 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <meta name="theme-color" content="#1a0a2e">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="果果排序">
+  <meta name="description" content="像素風格水果排序益智遊戲">
+  <link rel="manifest" href="manifest.json">
+  <link rel="apple-touch-icon" href="icon-192.png">
+  <title>🍎 果果排序</title>
+  <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg-deep:    #0d0820;
+      --bg-mid:     #1a0a2e;
+      --bg-panel:   #12062a;
+      --border:     #4a2f7a;
+      --border-hi:  #8b5cf6;
+      --accent:     #c084fc;
+      --accent2:    #f0abfc;
+      --text:       #e9d5ff;
+      --text-dim:   #7c3aed;
+      --tube-bg:    rgba(139,92,246,0.08);
+      --tube-brd:   #6d28d9;
+      --tube-sel:   #c084fc;
+      --tube-done:  #4ade80;
+      --shadow:     #000;
+      --pixel: 3px;
+    }
+
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: 'Press Start 2P', monospace;
+      background: var(--bg-deep);
+      color: var(--text);
+      min-height: 100dvh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      overflow: hidden;
+      position: relative;
+    }
+
+    /* Pixel grid background */
+    body::before {
+      content: '';
+      position: fixed; inset: 0;
+      background-image:
+        linear-gradient(rgba(139,92,246,0.04) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(139,92,246,0.04) 1px, transparent 1px);
+      background-size: 24px 24px;
+      pointer-events: none;
+      z-index: 0;
+    }
+
+    /* Scanline effect */
+    body::after {
+      content: '';
+      position: fixed; inset: 0;
+      background: repeating-linear-gradient(
+        0deg,
+        transparent,
+        transparent 3px,
+        rgba(0,0,0,0.08) 3px,
+        rgba(0,0,0,0.08) 4px
+      );
+      pointer-events: none;
+      z-index: 1;
+    }
+
+    #app {
+      position: relative;
+      z-index: 2;
+      width: 100%;
+      max-width: 480px;
+      min-height: 100dvh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 12px 12px 20px;
+    }
+
+    /* ── HEADER ── */
+    .header {
+      width: 100%;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 8px 4px 12px;
+      border-bottom: var(--pixel) solid var(--border);
+      margin-bottom: 12px;
+    }
+
+    .title {
+      font-size: 10px;
+      color: var(--accent2);
+      text-shadow: 0 0 8px var(--border-hi), 3px 3px 0 #000;
+      letter-spacing: 1px;
+    }
+
+    .level-badge {
+      font-size: 7px;
+      color: var(--accent);
+      background: rgba(139,92,246,0.2);
+      border: 2px solid var(--border);
+      padding: 4px 8px;
+      image-rendering: pixelated;
+    }
+
+    /* ── STATS BAR ── */
+    .stats {
+      width: 100%;
+      display: flex;
+      justify-content: space-around;
+      margin-bottom: 14px;
+    }
+
+    .stat-box {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 4px;
+      background: var(--bg-panel);
+      border: 2px solid var(--border);
+      padding: 6px 10px;
+      min-width: 70px;
+      box-shadow: 3px 3px 0 #000;
+    }
+
+    .stat-label {
+      font-size: 5px;
+      color: var(--text-dim);
+      letter-spacing: 0.5px;
+    }
+
+    .stat-value {
+      font-size: 11px;
+      color: var(--accent2);
+      text-shadow: 0 0 6px var(--accent);
+    }
+
+    /* ── GAME AREA ── */
+    .game-area {
+      flex: 1;
+      width: 100%;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 16px;
+    }
+
+    .tubes-row {
+      display: flex;
+      flex-wrap: nowrap;
+      justify-content: center;
+      gap: 8px;
+      width: 100%;
+    }
+
+    /* ── TUBE ── */
+    .tube-wrap {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      cursor: pointer;
+      transition: transform 0.1s;
+      position: relative;
+    }
+
+    .tube-wrap:active { transform: scale(0.95); }
+
+    .tube-wrap.selected .tube {
+      border-color: var(--tube-sel);
+      box-shadow: 0 0 0 2px var(--tube-sel), 4px 4px 0 #000;
+    }
+
+    .tube-wrap.selected .tube-top {
+      border-color: var(--tube-sel);
+    }
+
+    .tube-wrap.done .tube {
+      border-color: var(--tube-done);
+      box-shadow: 0 0 0 2px var(--tube-done), 4px 4px 0 #000;
+    }
+
+    .tube-wrap.done .tube-top {
+      border-color: var(--tube-done);
+    }
+
+    .tube-top {
+      width: 18px;
+      height: 8px;
+      border-left: 3px solid var(--tube-brd);
+      border-right: 3px solid var(--tube-brd);
+      border-top: 3px solid var(--tube-brd);
+      background: transparent;
+      transition: border-color 0.2s;
+    }
+
+    .tube {
+      display: flex;
+      flex-direction: column-reverse;
+      justify-content: flex-start;
+      width: 44px;
+      background: var(--tube-bg);
+      border: 3px solid var(--tube-brd);
+      border-top: none;
+      border-radius: 0 0 8px 8px;
+      overflow: hidden;
+      box-shadow: 4px 4px 0 #000;
+      transition: border-color 0.2s, box-shadow 0.2s;
+      position: relative;
+    }
+
+    /* Tube glass shine */
+    .tube::after {
+      content: '';
+      position: absolute;
+      top: 0; left: 4px;
+      width: 4px;
+      height: 100%;
+      background: linear-gradient(90deg, rgba(255,255,255,0.12), transparent);
+      pointer-events: none;
+    }
+
+    .fruit-cell {
+      width: 100%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 18px;
+      line-height: 1;
+      flex-shrink: 0;
+      transition: transform 0.15s ease;
+      image-rendering: auto;
+      user-select: none;
+    }
+
+    /* bounce in animation */
+    @keyframes dropIn {
+      0%   { transform: translateY(-8px) scale(0.8); opacity: 0.4; }
+      60%  { transform: translateY(2px) scale(1.05); }
+      100% { transform: translateY(0) scale(1); opacity: 1; }
+    }
+
+    .fruit-cell.animate {
+      animation: dropIn 0.2s ease forwards;
+    }
+
+    /* lift animation for selected top fruit */
+    @keyframes floatUp {
+      0%,100% { transform: translateY(0); }
+      50%      { transform: translateY(-4px); }
+    }
+
+    .tube-wrap.selected .fruit-cell:last-child {
+      animation: floatUp 0.6s ease infinite;
+    }
+
+    /* ── CONTROLS ── */
+    .controls {
+      display: flex;
+      gap: 10px;
+      margin-top: 8px;
+    }
+
+    .btn {
+      font-family: 'Press Start 2P', monospace;
+      font-size: 8px;
+      color: var(--text);
+      background: var(--bg-panel);
+      border: 3px solid var(--border);
+      padding: 8px 14px;
+      cursor: pointer;
+      box-shadow: 4px 4px 0 #000;
+      transition: transform 0.08s, box-shadow 0.08s;
+      letter-spacing: 0.5px;
+    }
+
+    .btn:hover {
+      border-color: var(--border-hi);
+      color: var(--accent2);
+    }
+
+    .btn:active {
+      transform: translate(2px, 2px);
+      box-shadow: 2px 2px 0 #000;
+    }
+
+    .btn-undo  { border-color: #7c3aed; }
+    .btn-reset { border-color: #be185d; }
+    .btn-new   { border-color: #065f46; color: #4ade80; }
+
+    /* ── WIN OVERLAY ── */
+    #win-overlay {
+      display: none;
+      position: fixed; inset: 0;
+      background: rgba(0,0,0,0.85);
+      z-index: 100;
+      align-items: center;
+      justify-content: center;
+      flex-direction: column;
+      gap: 20px;
+    }
+
+    #win-overlay.show { display: flex; }
+
+    .win-box {
+      background: var(--bg-panel);
+      border: 4px solid var(--tube-done);
+      box-shadow: 0 0 0 3px #000, 8px 8px 0 #000;
+      padding: 28px 32px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 16px;
+      animation: winPop 0.4s cubic-bezier(0.175,0.885,0.32,1.275);
+    }
+
+    @keyframes winPop {
+      0%   { transform: scale(0.5) rotate(-5deg); opacity: 0; }
+      100% { transform: scale(1) rotate(0deg);    opacity: 1; }
+    }
+
+    .win-title {
+      font-size: 14px;
+      color: var(--tube-done);
+      text-shadow: 0 0 10px #4ade80, 3px 3px 0 #000;
+      text-align: center;
+    }
+
+    .win-sub {
+      font-size: 7px;
+      color: var(--text-dim);
+      text-align: center;
+      line-height: 2;
+    }
+
+    .win-steps {
+      font-size: 20px;
+      color: var(--accent2);
+      text-shadow: 0 0 8px var(--accent);
+    }
+
+    /* ── Particle burst ── */
+    .particle {
+      position: fixed;
+      font-size: 22px;
+      pointer-events: none;
+      z-index: 200;
+      animation: burst 0.9s ease forwards;
+    }
+
+    @keyframes burst {
+      0%   { transform: translate(0,0) scale(1); opacity: 1; }
+      100% { transform: translate(var(--dx), var(--dy)) scale(0.3); opacity: 0; }
+    }
+
+    /* ── hint message ── */
+    .hint {
+      font-size: 6px;
+      color: var(--text-dim);
+      text-align: center;
+      margin-top: 6px;
+      min-height: 14px;
+      transition: opacity 0.3s;
+    }
+
+    .hint.warn { color: #f87171; }
+
+    /* ── PWA install banner ── */
+    #install-banner {
+      display: none;
+      position: fixed;
+      bottom: 16px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: var(--bg-panel);
+      border: 3px solid var(--border-hi);
+      box-shadow: 4px 4px 0 #000;
+      padding: 10px 16px;
+      font-size: 6px;
+      color: var(--text);
+      z-index: 50;
+      align-items: center;
+      gap: 12px;
+      max-width: 340px;
+      width: 90%;
+    }
+
+    #install-banner.show { display: flex; }
+    #install-banner .btn { font-size: 6px; padding: 6px 10px; }
+
+    /* responsive for small phones */
+    @media (max-height: 680px) {
+      .fruit-cell { font-size: 15px; }
+      .tube { width: 38px; }
+    }
+  </style>
+</head>
+<body>
+<div id="app">
+  <header class="header">
+    <span class="title">🍎 果果排序</span>
+    <span class="level-badge" id="level-badge">STAGE 1</span>
+  </header>
+
+  <div class="stats">
+    <div class="stat-box">
+      <span class="stat-label">STEPS</span>
+      <span class="stat-value" id="stat-steps">0</span>
+    </div>
+    <div class="stat-box">
+      <span class="stat-label">BEST</span>
+      <span class="stat-value" id="stat-best">--</span>
+    </div>
+    <div class="stat-box">
+      <span class="stat-label">DONE</span>
+      <span class="stat-value" id="stat-done">0/0</span>
+    </div>
+  </div>
+
+  <div class="game-area">
+    <div class="tubes-row" id="row-top"></div>
+    <div class="tubes-row" id="row-bot"></div>
+  </div>
+
+  <p class="hint" id="hint">點選試管開始移動水果</p>
+
+  <div class="controls">
+    <button class="btn btn-undo"  id="btn-undo">↩ 復原</button>
+    <button class="btn btn-reset" id="btn-reset">↺ 重玩</button>
+    <button class="btn btn-new"   id="btn-new">▶ 新關</button>
+  </div>
+</div>
+
+<!-- Win Overlay -->
+<div id="win-overlay">
+  <div class="win-box">
+    <div class="win-title">★ CLEAR! ★</div>
+    <div class="win-sub">所有水果<br>已完美排序！</div>
+    <div class="win-steps" id="win-steps-val">0 步</div>
+    <button class="btn btn-new" id="win-next">▶▶ 下一關</button>
+  </div>
+</div>
+
+<!-- PWA Install -->
+<div id="install-banner">
+  <span>安裝到主螢幕，<br>離線也能玩！</span>
+  <button class="btn" id="btn-install">安裝</button>
+  <button class="btn" id="btn-dismiss">✕</button>
+</div>
+
+<script>
+// ══════════════════════════════════════════
+//  GAME CONFIG
+// ══════════════════════════════════════════
+const FRUITS = ['🍎','🍋','🍇','🍊','🍓','🫐','🍑','🥝','🍍','🍈'];
+const TUBE_CAPACITY = 4;
+
+// difficulty scales with level
+function getDifficulty(level) {
+  if (level <= 3)  return { fruits: 2, extra: 1 };
+  if (level <= 6)  return { fruits: 3, extra: 1 };
+  if (level <= 10) return { fruits: 4, extra: 2 };
+  if (level <= 15) return { fruits: 5, extra: 2 };
+  return { fruits: Math.min(6 + Math.floor((level-15)/3), 10), extra: 2 };
+}
+
+// ══════════════════════════════════════════
+//  STATE
+// ══════════════════════════════════════════
+let state = {
+  tubes:      [],   // array of arrays (bottom→top)
+  selected:   -1,
+  steps:      0,
+  level:      1,
+  history:    [],   // for undo
+  done:       false,
+};
+
+let bestScores = JSON.parse(localStorage.getItem('fruitBest') || '{}');
+
+// ══════════════════════════════════════════
+//  LEVEL GENERATION
+// ══════════════════════════════════════════
+function generateLevel(level) {
+  const { fruits: numFruits, extra } = getDifficulty(level);
+  const totalTubes = numFruits + extra;
+  const pool = [];
+
+  for (let i = 0; i < numFruits; i++) {
+    for (let j = 0; j < TUBE_CAPACITY; j++) pool.push(i);
+  }
+
+  // Fisher-Yates shuffle
+  for (let i = pool.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [pool[i], pool[j]] = [pool[j], pool[i]];
+  }
+
+  const tubes = [];
+  for (let i = 0; i < numFruits; i++) {
+    tubes.push(pool.splice(0, TUBE_CAPACITY));
+  }
+  // extra empty tubes
+  for (let i = 0; i < extra; i++) tubes.push([]);
+
+  // map indices to emoji
+  const fruitSet = FRUITS.slice(0, numFruits);
+  return tubes.map(t => t.map(idx => fruitSet[idx]));
+}
+
+// ══════════════════════════════════════════
+//  GAME LOGIC
+// ══════════════════════════════════════════
+function topOf(tube) { return tube[tube.length - 1]; }
+
+function canMove(from, to) {
+  if (from === to) return false;
+  const src = state.tubes[from];
+  const dst = state.tubes[to];
+  if (src.length === 0) return false;
+  if (dst.length >= TUBE_CAPACITY) return false;
+  if (dst.length === 0) return true;
+  return topOf(src) === topOf(dst);
+}
+
+function doMove(from, to) {
+  // push to history for undo
+  state.history.push(JSON.parse(JSON.stringify(state.tubes)));
+  state.tubes[to].push(state.tubes[from].pop());
+  state.steps++;
+  checkWin();
+}
+
+function checkWin() {
+  const total = state.tubes.length;
+  const done = state.tubes.filter(t =>
+    t.length === 0 || (t.length === TUBE_CAPACITY && new Set(t).size === 1)
+  ).length;
+  updateStatDone(done, total);
+  if (done === total) {
+    state.done = true;
+    saveBest();
+    setTimeout(showWin, 400);
+  }
+}
+
+function saveBest() {
+  const key = String(state.level);
+  if (!bestScores[key] || state.steps < bestScores[key]) {
+    bestScores[key] = state.steps;
+    localStorage.setItem('fruitBest', JSON.stringify(bestScores));
+  }
+}
+
+// ══════════════════════════════════════════
+//  RENDER
+// ══════════════════════════════════════════
+function render() {
+  const tubes = state.tubes;
+  const numFruits = getDifficulty(state.level).fruits;
+  const half = Math.ceil(tubes.length / 2);
+
+  const rowTop = document.getElementById('row-top');
+  const rowBot = document.getElementById('row-bot');
+  rowTop.innerHTML = '';
+  rowBot.innerHTML = '';
+
+  // compute tube pixel height based on level difficulty
+  const cellH = Math.min(44, Math.floor((window.innerHeight * 0.32) / TUBE_CAPACITY));
+
+  tubes.forEach((tube, i) => {
+    const isDone = tube.length === 0 ||
+      (tube.length === TUBE_CAPACITY && new Set(tube).size === 1);
+    const isSelected = state.selected === i;
+
+    const wrap = document.createElement('div');
+    wrap.className = 'tube-wrap' +
+      (isSelected ? ' selected' : '') +
+      (isDone && tube.length > 0 ? ' done' : '');
+    wrap.dataset.idx = i;
+    wrap.addEventListener('click', () => onTubeClick(i));
+
+    const top = document.createElement('div');
+    top.className = 'tube-top';
+
+    const tubeEl = document.createElement('div');
+    tubeEl.className = 'tube';
+    tubeEl.style.height = (cellH * TUBE_CAPACITY) + 'px';
+
+    // fill empty slots first (bottom visually is index 0)
+    for (let s = 0; s < TUBE_CAPACITY; s++) {
+      const cell = document.createElement('div');
+      cell.className = 'fruit-cell';
+      cell.style.height = cellH + 'px';
+      if (s < tube.length) {
+        cell.textContent = tube[s];
+      }
+      tubeEl.appendChild(cell);
+    }
+
+    wrap.appendChild(top);
+    wrap.appendChild(tubeEl);
+
+    if (i < half) rowTop.appendChild(wrap);
+    else rowBot.appendChild(wrap);
+  });
+
+  // stats
+  document.getElementById('stat-steps').textContent = state.steps;
+  const bestKey = String(state.level);
+  document.getElementById('stat-best').textContent =
+    bestScores[bestKey] !== undefined ? bestScores[bestKey] : '--';
+  document.getElementById('level-badge').textContent = `STAGE ${state.level}`;
+}
+
+function updateStatDone(done, total) {
+  document.getElementById('stat-done').textContent = `${done}/${total}`;
+}
+
+function showHint(msg, warn = false) {
+  const el = document.getElementById('hint');
+  el.textContent = msg;
+  el.className = 'hint' + (warn ? ' warn' : '');
+}
+
+// ══════════════════════════════════════════
+//  INTERACTION
+// ══════════════════════════════════════════
+function onTubeClick(idx) {
+  if (state.done) return;
+
+  if (state.selected === -1) {
+    if (state.tubes[idx].length === 0) {
+      showHint('試管是空的！', true);
+      return;
+    }
+    state.selected = idx;
+    showHint(`選中：${topOf(state.tubes[idx])}  →  點選目標試管`);
+    render();
+  } else {
+    if (state.selected === idx) {
+      // deselect
+      state.selected = -1;
+      showHint('已取消選取');
+      render();
+      return;
+    }
+    if (canMove(state.selected, idx)) {
+      const from = state.selected;
+      state.selected = -1;
+      doMove(from, idx);
+      showHint('點選試管開始移動水果');
+      render();
+      animateFruitDrop(idx);
+    } else {
+      showHint('無法移動到這裡！', true);
+      shakeEl(document.querySelector(`[data-idx="${idx}"] .tube`));
+    }
+  }
+}
+
+function animateFruitDrop(tubeIdx) {
+  const wrap = document.querySelector(`[data-idx="${tubeIdx}"]`);
+  if (!wrap) return;
+  const cells = wrap.querySelectorAll('.fruit-cell');
+  const topCell = cells[cells.length - 1]; // visually last = top of stack
+  if (topCell && topCell.textContent) {
+    topCell.classList.remove('animate');
+    void topCell.offsetWidth;
+    topCell.classList.add('animate');
+  }
+}
+
+function shakeEl(el) {
+  if (!el) return;
+  el.style.animation = 'none';
+  el.style.transition = 'transform 0.05s';
+  let count = 0;
+  const dirs = [-4, 4, -4, 4, 0];
+  const tick = () => {
+    if (count >= dirs.length) { el.style.transform = ''; return; }
+    el.style.transform = `translateX(${dirs[count]}px)`;
+    count++;
+    setTimeout(tick, 50);
+  };
+  tick();
+}
+
+// ══════════════════════════════════════════
+//  WIN
+// ══════════════════════════════════════════
+function showWin() {
+  document.getElementById('win-steps-val').textContent = `${state.steps} 步`;
+  document.getElementById('win-overlay').classList.add('show');
+  fireParticles();
+}
+
+function hideWin() {
+  document.getElementById('win-overlay').classList.remove('show');
+}
+
+function fireParticles() {
+  const { fruits } = getDifficulty(state.level);
+  const pool = FRUITS.slice(0, fruits);
+  for (let i = 0; i < 22; i++) {
+    setTimeout(() => {
+      const p = document.createElement('div');
+      p.className = 'particle';
+      p.textContent = pool[Math.floor(Math.random() * pool.length)];
+      const cx = window.innerWidth / 2;
+      const cy = window.innerHeight / 2;
+      p.style.left = (cx + (Math.random() - 0.5) * 60) + 'px';
+      p.style.top  = (cy + (Math.random() - 0.5) * 60) + 'px';
+      const angle = Math.random() * 2 * Math.PI;
+      const dist  = 80 + Math.random() * 160;
+      p.style.setProperty('--dx', Math.cos(angle) * dist + 'px');
+      p.style.setProperty('--dy', Math.sin(angle) * dist - 80 + 'px');
+      document.body.appendChild(p);
+      setTimeout(() => p.remove(), 950);
+    }, i * 40);
+  }
+}
+
+// ══════════════════════════════════════════
+//  NEW GAME / UNDO / RESET
+// ══════════════════════════════════════════
+function startLevel(level) {
+  state.level   = level;
+  state.tubes   = generateLevel(level);
+  state.selected = -1;
+  state.steps   = 0;
+  state.history = [];
+  state.done    = false;
+  hideWin();
+  showHint('點選試管開始移動水果');
+  const total = state.tubes.length;
+  updateStatDone(0, total);
+  render();
+}
+
+function newLevel() {
+  startLevel(state.level + 1);
+}
+
+function resetLevel() {
+  state.history = [];
+  startLevel(state.level);
+}
+
+function undo() {
+  if (state.history.length === 0) {
+    showHint('無法再復原了！', true);
+    return;
+  }
+  state.tubes = state.history.pop();
+  state.selected = -1;
+  state.steps = Math.max(0, state.steps - 1);
+  state.done = false;
+  showHint('已復原上一步');
+  render();
+}
+
+// ══════════════════════════════════════════
+//  BUTTONS
+// ══════════════════════════════════════════
+document.getElementById('btn-undo').addEventListener('click', undo);
+document.getElementById('btn-reset').addEventListener('click', resetLevel);
+document.getElementById('btn-new').addEventListener('click', newLevel);
+document.getElementById('win-next').addEventListener('click', newLevel);
+
+// ══════════════════════════════════════════
+//  PWA INSTALL
+// ══════════════════════════════════════════
+let deferredPrompt = null;
+window.addEventListener('beforeinstallprompt', e => {
+  e.preventDefault();
+  deferredPrompt = e;
+  const banner = document.getElementById('install-banner');
+  banner.classList.add('show');
+});
+
+document.getElementById('btn-install').addEventListener('click', () => {
+  if (!deferredPrompt) return;
+  deferredPrompt.prompt();
+  deferredPrompt.userChoice.then(() => {
+    deferredPrompt = null;
+    document.getElementById('install-banner').classList.remove('show');
+  });
+});
+
+document.getElementById('btn-dismiss').addEventListener('click', () => {
+  document.getElementById('install-banner').classList.remove('show');
+});
+
+// ══════════════════════════════════════════
+//  SERVICE WORKER
+// ══════════════════════════════════════════
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.register('sw.js').catch(() => {});
+}
+
+// ══════════════════════════════════════════
+//  INIT
+// ══════════════════════════════════════════
+startLevel(1);
+</script>
+</body>
+</html>
